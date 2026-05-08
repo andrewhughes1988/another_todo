@@ -3,29 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cloud Native To-Do</title>
+  <title>to-do app</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <main class="container">
-    <h1>Cloud Native To-Do</h1>
+    <section class="app-shell" aria-labelledby="app-title">
+      <header class="app-header">
+        <p class="eyebrow">Today</p>
+        <h1 id="app-title">to-do app</h1>
+        <p class="intro">Keep the next thing clear, small, and ready to ship.</p>
+      </header>
 
-    <form id="todo-form" novalidate>
-      <label class="sr-only" for="todo-input">Task</label>
-      <input
-        id="todo-input"
-        type="text"
-        placeholder="Add a task"
-        autocomplete="off"
-        maxlength="120"
-        required
-        aria-describedby="todo-error"
-      />
-      <button type="submit">Add</button>
-    </form>
-    <p id="todo-error" class="form-error" role="alert"></p>
+      <form id="todo-form" novalidate>
+        <label class="sr-only" for="todo-input">Task</label>
+        <input
+          id="todo-input"
+          type="text"
+          placeholder="Add a task"
+          autocomplete="off"
+          maxlength="120"
+          required
+          aria-describedby="todo-error"
+        />
+        <button type="submit">Add task</button>
+      </form>
+      <p id="todo-error" class="form-error" role="alert"></p>
 
-    <ul id="todo-list"></ul>
+      <div class="list-header">
+        <h2>Tasks</h2>
+        <span id="todo-count">0 open</span>
+      </div>
+
+      <p id="empty-state" class="empty-state">No tasks yet. Add one small thing to get moving.</p>
+      <ul id="todo-list"></ul>
+    </section>
   </main>
 
   <script src="./app.js"></script>
