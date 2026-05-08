@@ -12,7 +12,28 @@
   --accent: #1f7a5a;
   --accent-dark: #155f45;
   --danger: #b42318;
+  --danger-soft: #f3e8e6;
+  --task-bg: #f8faf8;
   --shadow: 0 24px 60px rgba(23, 33, 27, 0.14);
+  --bg-wash-a: rgba(31, 122, 90, 0.16);
+  --bg-wash-b: rgba(246, 190, 116, 0.2);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111715;
+  --surface: #18211d;
+  --ink: #edf5ef;
+  --muted: #a7b8ae;
+  --line: #2b3a33;
+  --accent: #62d5a8;
+  --accent-dark: #8ee6c2;
+  --danger: #ffb4aa;
+  --danger-soft: #3b211f;
+  --task-bg: #1d2924;
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
+  --bg-wash-a: rgba(98, 213, 168, 0.12);
+  --bg-wash-b: rgba(246, 190, 116, 0.1);
 }
 
 body {
@@ -20,8 +41,8 @@ body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
   background:
-    linear-gradient(135deg, rgba(31, 122, 90, 0.16), transparent 42%),
-    linear-gradient(315deg, rgba(246, 190, 116, 0.2), transparent 36%),
+    linear-gradient(135deg, var(--bg-wash-a), transparent 42%),
+    linear-gradient(315deg, var(--bg-wash-b), transparent 36%),
     var(--bg);
   margin: 0;
 }
@@ -33,15 +54,24 @@ body {
 }
 
 .app-shell {
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   border-radius: 8px;
   box-shadow: var(--shadow);
   padding: clamp(24px, 5vw, 40px);
 }
 
 .app-header {
+  display: grid;
+  gap: 16px;
   margin-bottom: 28px;
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .eyebrow {
@@ -51,6 +81,23 @@ body {
   letter-spacing: 0.08em;
   margin: 0 0 8px;
   text-transform: uppercase;
+}
+
+.theme-toggle {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  padding: 0 14px;
+}
+
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.theme-toggle:hover {
+  background: var(--task-bg);
 }
 
 h1,
@@ -120,15 +167,25 @@ form {
 }
 
 button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border: 0;
   border-radius: 8px;
   background: var(--accent);
-  color: #ffffff;
+  color: var(--surface);
   cursor: pointer;
   font: inherit;
   font-weight: 700;
   padding: 0 18px;
   transition: background 160ms ease, transform 160ms ease;
+}
+
+button svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
 }
 
 button:hover {
@@ -185,7 +242,7 @@ li {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  background: #f8faf8;
+  background: var(--task-bg);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px;
@@ -210,11 +267,13 @@ li.is-complete span {
 .remove-task {
   background: transparent;
   color: var(--muted);
-  padding: 8px 10px;
+  width: 38px;
+  height: 38px;
+  padding: 0;
 }
 
 .remove-task:hover {
-  background: #f3e8e6;
+  background: var(--danger-soft);
   color: var(--danger);
 }
 

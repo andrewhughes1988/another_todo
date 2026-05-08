@@ -10,9 +10,17 @@
   <main class="container">
     <section class="app-shell" aria-labelledby="app-title">
       <header class="app-header">
-        <p class="eyebrow">Today</p>
-        <h1 id="app-title">to-do app</h1>
-        <p class="intro">Keep the next thing clear, small, and ready to ship.</p>
+        <div class="header-top">
+          <p class="eyebrow">Today</p>
+          <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false">
+            <i data-lucide="moon" aria-hidden="true"></i>
+            <span>Dark</span>
+          </button>
+        </div>
+        <div>
+          <h1 id="app-title">to-do app</h1>
+          <p class="intro">Keep the next thing clear, small, and ready to ship.</p>
+        </div>
       </header>
 
       <form id="todo-form" novalidate>
@@ -26,7 +34,10 @@
           required
           aria-describedby="todo-error"
         />
-        <button type="submit">Add task</button>
+        <button class="add-task" type="submit">
+          <i data-lucide="plus" aria-hidden="true"></i>
+          <span>Add task</span>
+        </button>
       </form>
       <p id="todo-error" class="form-error" role="alert"></p>
 
@@ -40,6 +51,7 @@
     </section>
   </main>
 
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

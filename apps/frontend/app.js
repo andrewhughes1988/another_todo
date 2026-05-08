@@ -4,9 +4,11 @@ const list = document.getElementById("todo-list");
 const error = document.getElementById("todo-error");
 const count = document.getElementById("todo-count");
 const emptyState = document.getElementById("empty-state");
+const themeToggle = document.getElementById("theme-toggle");
 
 const MAX_TASK_LENGTH = 120;
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/g;
+const THEME_STORAGE_KEY = "todo-theme";
 
 function cleanTask(value) {
   return value
@@ -20,6 +22,27 @@ function cleanTask(value) {
 function setError(message) {
   error.textContent = message;
   input.setAttribute("aria-invalid", message ? "true" : "false");
+}
+
+function getSystemTheme() {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function getStoredTheme() {
+  const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+  return storedTheme === "dark" || storedTheme === "light" ? storedTheme : null;
+}
+
+function setTheme(theme) {
+  const isDark = theme === "dark";
+
+  document.documentElement.dataset.theme = theme;
+  themeToggle.innerHTML = `
+    <i data-lucide="${isDark ? "sun" : "moon"}" aria-hidden="true"></i>
+    <span>${isDark ? "Light" : "Dark"}</span>
+  `;
+  themeToggle.setAttribute("aria-pressed", isDark ? "true" : "false");
+  renderIcons();
 }
 
 function updateListState() {
@@ -43,8 +66,12 @@ function createTaskItem(task) {
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.className = "remove-task";
-  removeButton.textContent = "Remove";
+  removeButton.innerHTML = `
+    <i data-lucide="trash-2" aria-hidden="true"></i>
+    <span class="sr-only">Remove</span>
+  `;
   removeButton.setAttribute("aria-label", `Remove ${task}`);
+  removeButton.title = "Remove task";
 
   checkbox.addEventListener("change", function () {
     item.classList.toggle("is-complete", checkbox.checked);
@@ -58,6 +85,16 @@ function createTaskItem(task) {
 
   item.append(checkbox, text, removeButton);
   return item;
+}
+
+function renderIcons() {
+  if (window.lucide) {
+    window.lucide.createIcons({
+      attrs: {
+        "stroke-width": 2.25
+      }
+    });
+  }
 }
 
 form.addEventListener("submit", function (event) {
@@ -83,6 +120,7 @@ form.addEventListener("submit", function (event) {
   input.value = "";
   setError("");
   updateListState();
+  renderIcons();
 });
 
 input.addEventListener("input", function () {
@@ -91,4 +129,19 @@ input.addEventListener("input", function () {
   }
 });
 
+themeToggle.addEventListener("click", function () {
+  const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+
+  localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+  setTheme(nextTheme);
+});
+
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () {
+  if (!getStoredTheme()) {
+    setTheme(getSystemTheme());
+  }
+});
+
+setTheme(getStoredTheme() || getSystemTheme());
 updateListState();
+renderIcons();
