@@ -139,9 +139,9 @@ function updateAuthState() {
   const signedIn = Boolean(auth && auth.accessToken);
 
   authStatus.textContent = signedIn ? auth.user.email : "Signed out";
-  logoutButton.hidden = !signedIn;
   loginButton.hidden = signedIn;
   registerButton.hidden = signedIn;
+  logoutButton.hidden = !signedIn;
   input.disabled = !signedIn;
   form.querySelector("button").disabled = !signedIn;
 
