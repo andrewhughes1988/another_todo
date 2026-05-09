@@ -29,6 +29,8 @@
     </div>
   </header>
 
+  <p id="session-notice" class="session-notice" role="status" hidden></p>
+
   <main class="container">
     <section class="app-shell" aria-labelledby="app-title">
       <header class="app-header">
@@ -59,7 +61,17 @@
 
       <div class="list-header">
         <h2>Tasks</h2>
-        <span id="todo-count">0 open</span>
+        <div class="list-tools">
+          <span id="todo-count">0 open</span>
+          <div class="filter-tabs" aria-label="Task filter">
+            <button class="filter-tab is-active" type="button" data-filter="all" aria-pressed="true">All</button>
+            <button class="filter-tab" type="button" data-filter="open" aria-pressed="false">Open</button>
+            <button class="filter-tab" type="button" data-filter="done" aria-pressed="false">Done</button>
+          </div>
+          <button id="clear-completed-button" class="secondary-button compact-button" type="button" hidden>
+            Clear completed
+          </button>
+        </div>
       </div>
 
       <p id="empty-state" class="empty-state">No tasks yet. Add one small thing to get moving.</p>
@@ -104,6 +116,10 @@
         />
         <button id="auth-submit-button" type="submit">Sign in</button>
       </form>
+      <p class="auth-switch">
+        <span id="auth-switch-copy">Need an account?</span>
+        <button id="auth-switch-button" class="link-button" type="button">Register</button>
+      </p>
       <p id="auth-error" class="form-error" role="alert"></p>
     </section>
   </div>

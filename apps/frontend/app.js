@@ -17,6 +17,12 @@ const authModal = document.getElementById("auth-modal");
 const authModalTitle = document.getElementById("auth-modal-title");
 const authCloseButton = document.getElementById("auth-close-button");
 const authSubmitButton = document.getElementById("auth-submit-button");
+const authSwitchCopy = document.getElementById("auth-switch-copy");
+const authSwitchButton = document.getElementById("auth-switch-button");
+const filterButtons = document.querySelectorAll("[data-filter]");
+const clearCompletedButton = document.getElementById("clear-completed-button");
+const sessionNotice = document.getElementById("session-notice");
+const addTaskButton = form.querySelector("button");
 
 const API_CONFIG = window.APP_CONFIG || {};
 const TODO_API_URL = API_CONFIG.todoApiUrl || "http://localhost:4001";
@@ -55,6 +61,13 @@ const ICONS = {
 
 let auth = getStoredAuth();
 let authMode = "login";
+let isAuthenticating = false;
+let isAddingTask = false;
+let isLoadingTodos = false;
+let todoLoadError = "";
+let lastFocusedElement = null;
+let currentFilter = "all";
+let noticeTimer = null;
 
 function cleanTask(value) {
   return value
@@ -73,6 +86,17 @@ function setAuthError(message) {
   authError.textContent = message;
   emailInput.setAttribute("aria-invalid", message ? "true" : "false");
   passwordInput.setAttribute("aria-invalid", message ? "true" : "false");
+}
+
+function showSessionNotice(message) {
+  window.clearTimeout(noticeTimer);
+  sessionNotice.textContent = message;
+  sessionNotice.hidden = false;
+
+  noticeTimer = window.setTimeout(function () {
+    sessionNotice.hidden = true;
+    sessionNotice.textContent = "";
+  }, 3200);
 }
 
 function getSystemTheme() {
@@ -143,7 +167,7 @@ function updateAuthState() {
   registerButton.hidden = signedIn;
   logoutButton.hidden = !signedIn;
   input.disabled = !signedIn;
-  form.querySelector("button").disabled = !signedIn;
+  addTaskButton.disabled = !signedIn || isAddingTask;
 
   if (!signedIn) {
     list.replaceChildren();
@@ -156,8 +180,14 @@ function openAuthModal(mode) {
   authMode = mode;
   const isRegister = mode === "register";
 
+  if (authModal.hidden) {
+    lastFocusedElement = document.activeElement;
+  }
+
   authModalTitle.textContent = isRegister ? "Create account" : "Sign in";
   authSubmitButton.textContent = isRegister ? "Register" : "Sign in";
+  authSwitchCopy.textContent = isRegister ? "Already have an account?" : "Need an account?";
+  authSwitchButton.textContent = isRegister ? "Sign in" : "Register";
   emailInput.value = "";
   passwordInput.value = "";
   setAuthError("");
@@ -168,16 +198,101 @@ function openAuthModal(mode) {
 function closeAuthModal() {
   authModal.hidden = true;
   setAuthError("");
+
+  if (lastFocusedElement && typeof lastFocusedElement.focus === "function") {
+    lastFocusedElement.focus();
+  }
+}
+
+function getFocusableModalElements() {
+  return Array.from(
+    authModal.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])')
+  ).filter(function (element) {
+    return !element.disabled && element.offsetParent !== null;
+  });
+}
+
+function trapModalFocus(event) {
+  const focusableElements = getFocusableModalElements();
+
+  if (focusableElements.length === 0) {
+    return;
+  }
+
+  const firstElement = focusableElements[0];
+  const lastElement = focusableElements[focusableElements.length - 1];
+
+  if (event.shiftKey && document.activeElement === firstElement) {
+    event.preventDefault();
+    lastElement.focus();
+  } else if (!event.shiftKey && document.activeElement === lastElement) {
+    event.preventDefault();
+    firstElement.focus();
+  }
 }
 
 function updateListState() {
   const signedIn = Boolean(auth && auth.accessToken);
   const openTasks = list.querySelectorAll("li:not(.is-complete)").length;
   const totalTasks = list.children.length;
+  const completedTasks = list.querySelectorAll("li.is-complete").length;
 
   count.textContent = `${openTasks} ${openTasks === 1 ? "task" : "tasks"} open`;
-  emptyState.hidden = signedIn && totalTasks > 0;
-  emptyState.textContent = signedIn ? "No tasks yet. Add one small thing to get moving." : "Sign in to view tasks.";
+  clearCompletedButton.hidden = !signedIn || completedTasks === 0;
+
+  if (!signedIn) {
+    emptyState.hidden = false;
+    emptyState.textContent = "Sign in to view tasks.";
+    return;
+  }
+
+  if (isLoadingTodos) {
+    emptyState.hidden = false;
+    emptyState.textContent = "Loading tasks...";
+    return;
+  }
+
+  if (todoLoadError) {
+    emptyState.hidden = false;
+    emptyState.textContent = todoLoadError;
+    return;
+  }
+
+  const visibleTasks = list.querySelectorAll("li:not([hidden])").length;
+
+  emptyState.hidden = visibleTasks > 0;
+  emptyState.textContent = getEmptyStateMessage(totalTasks, openTasks, completedTasks);
+}
+
+function getEmptyStateMessage(totalTasks, openTasks, completedTasks) {
+  if (totalTasks === 0) {
+    return "No tasks yet. Add one small thing to get moving.";
+  }
+
+  if (currentFilter === "open" && openTasks === 0) {
+    return "No open tasks.";
+  }
+
+  if (currentFilter === "done" && completedTasks === 0) {
+    return "No completed tasks yet.";
+  }
+
+  return "No tasks match this filter.";
+}
+
+function applyTaskFilter() {
+  list.querySelectorAll("li").forEach(function (item) {
+    const isComplete = item.classList.contains("is-complete");
+    item.hidden =
+      (currentFilter === "open" && isComplete) ||
+      (currentFilter === "done" && !isComplete);
+  });
+
+  filterButtons.forEach(function (button) {
+    const isActive = button.dataset.filter === currentFilter;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
 }
 
 function createTaskItem(task) {
@@ -204,18 +319,30 @@ function createTaskItem(task) {
   removeButton.title = "Remove task";
 
   checkbox.addEventListener("change", async function () {
+    const nextCompleted = checkbox.checked;
+    const previousCompleted = !nextCompleted;
+
+    item.classList.toggle("is-complete", nextCompleted);
+    applyTaskFilter();
+    updateListState();
     checkbox.disabled = true;
 
     try {
       const updated = await apiRequest(`${TODO_API_URL}/todos/${task.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ completed: checkbox.checked })
+        body: JSON.stringify({ completed: nextCompleted })
       });
 
+      task.completed = updated.completed;
+      checkbox.checked = updated.completed;
       item.classList.toggle("is-complete", updated.completed);
+      applyTaskFilter();
       updateListState();
     } catch (error) {
-      checkbox.checked = !checkbox.checked;
+      checkbox.checked = previousCompleted;
+      item.classList.toggle("is-complete", previousCompleted);
+      applyTaskFilter();
+      updateListState();
       setTodoError(error.message);
     } finally {
       checkbox.disabled = false;
@@ -223,14 +350,25 @@ function createTaskItem(task) {
   });
 
   removeButton.addEventListener("click", async function () {
+    const nextSibling = item.nextSibling;
+
     removeButton.disabled = true;
+    item.remove();
+    applyTaskFilter();
+    updateListState();
 
     try {
       await apiRequest(`${TODO_API_URL}/todos/${task.id}`, { method: "DELETE" });
-      item.remove();
-      updateListState();
     } catch (error) {
+      if (nextSibling && nextSibling.parentNode === list) {
+        list.insertBefore(item, nextSibling);
+      } else {
+        list.append(item);
+      }
+
       removeButton.disabled = false;
+      applyTaskFilter();
+      updateListState();
       setTodoError(error.message);
     }
   });
@@ -241,6 +379,7 @@ function createTaskItem(task) {
 
 function renderTodos(todos) {
   list.replaceChildren(...todos.map(createTaskItem));
+  applyTaskFilter();
   updateListState();
   renderIcons();
 }
@@ -251,12 +390,20 @@ async function loadTodos() {
     return;
   }
 
+  isLoadingTodos = true;
+  todoLoadError = "";
+  updateListState();
+
   try {
     const todos = await apiRequest(`${TODO_API_URL}/todos`);
     renderTodos(todos);
     setTodoError("");
   } catch (error) {
+    todoLoadError = error.message;
     setTodoError(error.message);
+  } finally {
+    isLoadingTodos = false;
+    updateListState();
   }
 }
 
@@ -314,6 +461,9 @@ async function authenticate(mode) {
   }
 
   setAuthError("");
+  isAuthenticating = true;
+  authSubmitButton.disabled = true;
+  authSubmitButton.textContent = mode === "register" ? "Registering..." : "Signing in...";
 
   try {
     const response = await fetch(`${USER_API_URL}/auth/${mode}`, {
@@ -334,9 +484,14 @@ async function authenticate(mode) {
     passwordInput.value = "";
     closeAuthModal();
     updateAuthState();
+    showSessionNotice(mode === "register" ? "Account created. You are signed in." : "Signed in.");
     await loadTodos();
   } catch (error) {
     setAuthError(error.message);
+  } finally {
+    isAuthenticating = false;
+    authSubmitButton.disabled = false;
+    authSubmitButton.textContent = authMode === "register" ? "Register" : "Sign in";
   }
 }
 
@@ -358,6 +513,7 @@ async function logout() {
   setAuthError("");
   setTodoError("");
   updateAuthState();
+  showSessionNotice("Signed out.");
 }
 
 function renderIcons() {
@@ -410,6 +566,48 @@ authCloseButton.addEventListener("click", function () {
   closeAuthModal();
 });
 
+authSwitchButton.addEventListener("click", function () {
+  openAuthModal(authMode === "register" ? "login" : "register");
+});
+
+filterButtons.forEach(function (button) {
+  button.addEventListener("click", function () {
+    currentFilter = button.dataset.filter;
+    applyTaskFilter();
+    updateListState();
+  });
+});
+
+clearCompletedButton.addEventListener("click", async function () {
+  const completedItems = Array.from(list.querySelectorAll("li.is-complete"));
+
+  if (completedItems.length === 0) {
+    return;
+  }
+
+  clearCompletedButton.disabled = true;
+  completedItems.forEach(function (item) {
+    item.remove();
+  });
+  applyTaskFilter();
+  updateListState();
+
+  try {
+    await Promise.all(
+      completedItems.map(function (item) {
+        return apiRequest(`${TODO_API_URL}/todos/${item.dataset.todoId}`, { method: "DELETE" });
+      })
+    );
+    setTodoError("");
+  } catch (error) {
+    setTodoError(error.message);
+    await loadTodos();
+  } finally {
+    clearCompletedButton.disabled = false;
+    updateListState();
+  }
+});
+
 authModal.addEventListener("click", function (event) {
   if (event.target === authModal) {
     closeAuthModal();
@@ -419,6 +617,8 @@ authModal.addEventListener("click", function (event) {
 document.addEventListener("keydown", function (event) {
   if (event.key === "Escape" && !authModal.hidden) {
     closeAuthModal();
+  } else if (event.key === "Tab" && !authModal.hidden) {
+    trapModalFocus(event);
   }
 });
 
@@ -448,6 +648,10 @@ form.addEventListener("submit", async function (event) {
     return;
   }
 
+  isAddingTask = true;
+  addTaskButton.disabled = true;
+  addTaskButton.querySelector("span").textContent = "Adding...";
+
   try {
     const created = await apiRequest(`${TODO_API_URL}/todos`, {
       method: "POST",
@@ -457,10 +661,15 @@ form.addEventListener("submit", async function (event) {
     list.prepend(createTaskItem(created));
     input.value = "";
     setTodoError("");
+    applyTaskFilter();
     updateListState();
     renderIcons();
   } catch (error) {
     setTodoError(error.message);
+  } finally {
+    isAddingTask = false;
+    addTaskButton.disabled = !auth || !auth.accessToken;
+    addTaskButton.querySelector("span").textContent = "Add task";
   }
 });
 
