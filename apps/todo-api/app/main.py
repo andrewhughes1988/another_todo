@@ -13,6 +13,7 @@ from .schemas import TodoCreate, TodoRead, TodoUpdate
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # TODO: Replace startup table creation with Alembic migrations during the database phase.
     Base.metadata.create_all(bind=engine)
     yield
 
