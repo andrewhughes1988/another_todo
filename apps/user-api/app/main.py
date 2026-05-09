@@ -19,6 +19,12 @@ from .schemas import AuthToken, TokenIntrospectionRequest, TokenIntrospectionRes
 DEFAULT_SERVICE_AUTH_TOKEN = "local-dev-service-token-32-bytes-minimum"
 SERVICE_AUTH_TOKEN = os.getenv("SERVICE_AUTH_TOKEN", DEFAULT_SERVICE_AUTH_TOKEN)
 APP_ENV = os.getenv("APP_ENV", "development")
+LOCAL_DEV_ORIGIN_REGEX = (
+    r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|host\.docker\.internal|\[::1\]|"
+    r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+    r"172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|"
+    r"192\.168\.\d{1,3}\.\d{1,3})(:\d+)?$"
+)
 RATE_LIMIT_WINDOW_SECONDS = 60
 RATE_LIMIT_MAX_ATTEMPTS = 10
 # TODO: Move rate-limit buckets and token revocation state to Redis before running multiple user-api replicas.
@@ -27,6 +33,27 @@ revoked_token_ids: set[str] = set()
 
 if APP_ENV == "production" and SERVICE_AUTH_TOKEN == DEFAULT_SERVICE_AUTH_TOKEN:
     raise RuntimeError("SERVICE_AUTH_TOKEN must be set to a production secret")
+
+
+def get_cors_origins() -> list[str]:
+    configured = os.getenv("CORS_ALLOW_ORIGINS")
+
+    if configured:
+        return [origin.strip() for origin in configured.split(",") if origin.strip()]
+
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+
+def get_cors_origin_regex() -> str | None:
+    configured = os.getenv("CORS_ALLOW_ORIGIN_REGEX")
+
+    if configured:
+        return configured
+
+    return LOCAL_DEV_ORIGIN_REGEX if APP_ENV != "production" else None
 
 
 @asynccontextmanager
@@ -41,10 +68,8 @@ MAX_WRITE_BODY_BYTES = 4096
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=get_cors_origins(),
+    allow_origin_regex=get_cors_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -47,6 +47,34 @@ def test_health(client: TestClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_allows_local_frontend_login_preflight(client: TestClient) -> None:
+    response = client.options(
+        "/auth/login",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+def test_allows_docker_host_frontend_login_preflight(client: TestClient) -> None:
+    response = client.options(
+        "/auth/login",
+        headers={
+            "Origin": "http://host.docker.internal:5173",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://host.docker.internal:5173"
+
+
 def test_register_and_login(client: TestClient) -> None:
     register_response = client.post(
         "/auth/register",

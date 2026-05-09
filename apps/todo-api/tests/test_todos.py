@@ -50,6 +50,20 @@ def test_health(client: TestClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_allows_local_frontend_todo_preflight(client: TestClient) -> None:
+    response = client.options(
+        "/todos",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
 def test_rejects_unauthenticated_todo_access(client: TestClient) -> None:
     response = client.get("/todos")
 

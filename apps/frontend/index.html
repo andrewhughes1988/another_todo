@@ -13,23 +13,27 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
+  <header class="app-navbar">
+    <div class="nav-shell">
+      <a class="brand-mark" href="#app-title">to-do app</a>
+      <nav class="nav-actions" aria-label="Account and display">
+        <span id="auth-status" class="auth-status">Signed out</span>
+        <button id="login-button" class="secondary-button compact-button" type="button">Sign in</button>
+        <button id="register-button" class="compact-button" type="button">Register</button>
+        <button id="logout-button" class="secondary-button compact-button" type="button" hidden>Sign out</button>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false">
+          <i data-lucide="moon" aria-hidden="true"></i>
+          <span>Dark</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
   <main class="container">
     <section class="app-shell" aria-labelledby="app-title">
       <header class="app-header">
-        <div class="header-top">
-          <p class="eyebrow">Today</p>
-          <nav class="nav-actions" aria-label="Account and display">
-            <span id="auth-status" class="auth-status">Signed out</span>
-            <button id="login-button" class="secondary-button compact-button" type="button">Sign in</button>
-            <button id="register-button" class="compact-button" type="button">Register</button>
-            <button id="logout-button" class="secondary-button compact-button" type="button" hidden>Sign out</button>
-            <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false">
-              <i data-lucide="moon" aria-hidden="true"></i>
-              <span>Dark</span>
-            </button>
-          </nav>
-        </div>
         <div>
+          <p class="eyebrow">Today</p>
           <h1 id="app-title">to-do app</h1>
           <p class="intro">Keep the next thing clear, small, and ready to ship.</p>
         </div>

@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,13 +21,40 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Todo API", version="0.1.0", lifespan=lifespan)
 MAX_WRITE_BODY_BYTES = 4096
+APP_ENV = os.getenv("APP_ENV", "development")
+LOCAL_DEV_ORIGIN_REGEX = (
+    r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|host\.docker\.internal|\[::1\]|"
+    r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+    r"172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|"
+    r"192\.168\.\d{1,3}\.\d{1,3})(:\d+)?$"
+)
+
+
+def get_cors_origins() -> list[str]:
+    configured = os.getenv("CORS_ALLOW_ORIGINS")
+
+    if configured:
+        return [origin.strip() for origin in configured.split(",") if origin.strip()]
+
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+
+def get_cors_origin_regex() -> str | None:
+    configured = os.getenv("CORS_ALLOW_ORIGIN_REGEX")
+
+    if configured:
+        return configured
+
+    return LOCAL_DEV_ORIGIN_REGEX if APP_ENV != "production" else None
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=get_cors_origins(),
+    allow_origin_regex=get_cors_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
