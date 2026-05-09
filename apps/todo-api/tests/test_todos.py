@@ -50,6 +50,13 @@ def test_health(client: TestClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_docs_available_in_development(client: TestClient) -> None:
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    assert response.json()["info"]["title"] == "Todo API"
+
+
 def test_allows_local_frontend_todo_preflight(client: TestClient) -> None:
     response = client.options(
         "/todos",

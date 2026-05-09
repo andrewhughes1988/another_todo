@@ -19,7 +19,6 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Todo API", version="0.1.0", lifespan=lifespan)
 MAX_WRITE_BODY_BYTES = 4096
 APP_ENV = os.getenv("APP_ENV", "development")
 LOCAL_DEV_ORIGIN_REGEX = (
@@ -33,6 +32,20 @@ ALLOWED_CORS_HEADERS = ["Authorization", "Content-Type"]
 
 if APP_ENV == "production" and not os.getenv("CORS_ALLOW_ORIGINS"):
     raise RuntimeError("CORS_ALLOW_ORIGINS must be set in production")
+
+
+def get_api_docs_url(path: str) -> str | None:
+    return None if APP_ENV == "production" else path
+
+
+app = FastAPI(
+    title="Todo API",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url=get_api_docs_url("/docs"),
+    redoc_url=get_api_docs_url("/redoc"),
+    openapi_url=get_api_docs_url("/openapi.json"),
+)
 
 
 def get_cors_origins() -> list[str]:

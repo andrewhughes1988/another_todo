@@ -64,7 +64,18 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="User API", version="0.1.0", lifespan=lifespan)
+def get_api_docs_url(path: str) -> str | None:
+    return None if APP_ENV == "production" else path
+
+
+app = FastAPI(
+    title="User API",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url=get_api_docs_url("/docs"),
+    redoc_url=get_api_docs_url("/redoc"),
+    openapi_url=get_api_docs_url("/openapi.json"),
+)
 MAX_WRITE_BODY_BYTES = 4096
 
 app.add_middleware(
