@@ -178,21 +178,26 @@ function updateAuthState() {
 
 function openAuthModal(mode) {
   authMode = mode;
-  const isRegister = mode === "register";
 
   if (authModal.hidden) {
     lastFocusedElement = document.activeElement;
   }
 
-  authModalTitle.textContent = isRegister ? "Create account" : "Sign in";
-  authSubmitButton.textContent = isRegister ? "Register" : "Sign in";
-  authSwitchCopy.textContent = isRegister ? "Already have an account?" : "Need an account?";
-  authSwitchButton.textContent = isRegister ? "Sign in" : "Register";
+  updateAuthModalMode();
   emailInput.value = "";
   passwordInput.value = "";
   setAuthError("");
   authModal.hidden = false;
   emailInput.focus();
+}
+
+function updateAuthModalMode() {
+  const isRegister = authMode === "register";
+
+  authModalTitle.textContent = isRegister ? "Create account" : "Sign in";
+  authSubmitButton.textContent = isRegister ? "Register" : "Sign in";
+  authSwitchCopy.textContent = isRegister ? "Have an account?" : "Need an account?";
+  authSwitchButton.textContent = isRegister ? "Sign in" : "Register";
 }
 
 function closeAuthModal() {
