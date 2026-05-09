@@ -256,6 +256,11 @@ button:active {
   gap: 12px;
 }
 
+.auth-form input,
+.auth-form button {
+  min-height: 48px;
+}
+
 .modal-backdrop {
   align-items: center;
   background: rgba(8, 11, 16, 0.62);
