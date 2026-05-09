@@ -88,15 +88,33 @@ function setAuthError(message) {
   passwordInput.setAttribute("aria-invalid", message ? "true" : "false");
 }
 
-function showSessionNotice(message) {
+function showToast(message, type = "success") {
   window.clearTimeout(noticeTimer);
+  sessionNotice.classList.toggle("is-error", type === "error");
   sessionNotice.textContent = message;
   sessionNotice.hidden = false;
 
   noticeTimer = window.setTimeout(function () {
     sessionNotice.hidden = true;
     sessionNotice.textContent = "";
+    sessionNotice.classList.remove("is-error");
   }, 3200);
+}
+
+function getFriendlyErrorMessage(message) {
+  if (message === "Request body is too large") {
+    return "That request is too large. Try a shorter value.";
+  }
+
+  if (message === "Failed to fetch" || message === "NetworkError when attempting to fetch resource.") {
+    return "Could not reach the server. Check that the app services are running.";
+  }
+
+  return message || "Something went wrong. Please try again.";
+}
+
+function showErrorToast(error) {
+  showToast(getFriendlyErrorMessage(error.message), "error");
 }
 
 function getSystemTheme() {
@@ -349,6 +367,7 @@ function createTaskItem(task) {
       applyTaskFilter();
       updateListState();
       setTodoError(error.message);
+      showErrorToast(error);
     } finally {
       checkbox.disabled = false;
     }
@@ -375,6 +394,7 @@ function createTaskItem(task) {
       applyTaskFilter();
       updateListState();
       setTodoError(error.message);
+      showErrorToast(error);
     }
   });
 
@@ -406,6 +426,7 @@ async function loadTodos() {
   } catch (error) {
     todoLoadError = error.message;
     setTodoError(error.message);
+    showErrorToast(error);
   } finally {
     isLoadingTodos = false;
     updateListState();
@@ -489,10 +510,11 @@ async function authenticate(mode) {
     passwordInput.value = "";
     closeAuthModal();
     updateAuthState();
-    showSessionNotice(mode === "register" ? "Account created. You are signed in." : "Signed in.");
+    showToast(mode === "register" ? "Account created. You are signed in." : "Signed in.");
     await loadTodos();
   } catch (error) {
     setAuthError(error.message);
+    showErrorToast(error);
   } finally {
     isAuthenticating = false;
     authSubmitButton.disabled = false;
@@ -518,7 +540,7 @@ async function logout() {
   setAuthError("");
   setTodoError("");
   updateAuthState();
-  showSessionNotice("Signed out.");
+  showToast("Signed out.");
 }
 
 function renderIcons() {
@@ -606,6 +628,7 @@ clearCompletedButton.addEventListener("click", async function () {
     setTodoError("");
   } catch (error) {
     setTodoError(error.message);
+    showErrorToast(error);
     await loadTodos();
   } finally {
     clearCompletedButton.disabled = false;
@@ -671,6 +694,7 @@ form.addEventListener("submit", async function (event) {
     renderIcons();
   } catch (error) {
     setTodoError(error.message);
+    showErrorToast(error);
   } finally {
     isAddingTask = false;
     addTaskButton.disabled = !auth || !auth.accessToken;

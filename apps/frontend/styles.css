@@ -95,6 +95,11 @@ body {
   display: none;
 }
 
+.session-notice.is-error {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
 .container {
   width: min(100% - 32px, 720px);
   margin: 0 auto;
