@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from .auth import TokenUser, get_current_user
 from .database import Base, engine, get_db
 from .models import Todo
 from .schemas import TodoCreate, TodoRead, TodoUpdate
@@ -36,7 +37,15 @@ async def limit_write_request_size(request: Request, call_next):
     if request.method in {"POST", "PATCH"}:
         content_length = request.headers.get("content-length")
 
-        if content_length and int(content_length) > MAX_WRITE_BODY_BYTES:
+        try:
+            body_size = int(content_length) if content_length else 0
+        except ValueError:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"detail": "Invalid Content-Length header"},
+            )
+
+        if body_size > MAX_WRITE_BODY_BYTES:
             return JSONResponse(
                 status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 content={"detail": "Request body is too large"},
@@ -51,13 +60,20 @@ def health() -> dict[str, str]:
 
 
 @app.get("/todos", response_model=list[TodoRead])
-def list_todos(db: Session = Depends(get_db)) -> list[Todo]:
-    return db.query(Todo).order_by(Todo.created_at.desc()).all()
+def list_todos(
+    db: Session = Depends(get_db),
+    current_user: TokenUser = Depends(get_current_user),
+) -> list[Todo]:
+    return db.query(Todo).filter(Todo.owner_id == current_user.id).order_by(Todo.created_at.desc()).all()
 
 
 @app.post("/todos", response_model=TodoRead, status_code=status.HTTP_201_CREATED)
-def create_todo(payload: TodoCreate, db: Session = Depends(get_db)) -> Todo:
-    todo = Todo(title=payload.title)
+def create_todo(
+    payload: TodoCreate,
+    db: Session = Depends(get_db),
+    current_user: TokenUser = Depends(get_current_user),
+) -> Todo:
+    todo = Todo(title=payload.title, owner_id=current_user.id)
     db.add(todo)
     db.commit()
     db.refresh(todo)
@@ -65,8 +81,13 @@ def create_todo(payload: TodoCreate, db: Session = Depends(get_db)) -> Todo:
 
 
 @app.patch("/todos/{todo_id}", response_model=TodoRead)
-def update_todo(todo_id: int, payload: TodoUpdate, db: Session = Depends(get_db)) -> Todo:
-    todo = db.get(Todo, todo_id)
+def update_todo(
+    todo_id: int,
+    payload: TodoUpdate,
+    db: Session = Depends(get_db),
+    current_user: TokenUser = Depends(get_current_user),
+) -> Todo:
+    todo = db.query(Todo).filter(Todo.id == todo_id, Todo.owner_id == current_user.id).one_or_none()
 
     if todo is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
@@ -81,8 +102,12 @@ def update_todo(todo_id: int, payload: TodoUpdate, db: Session = Depends(get_db)
 
 
 @app.delete("/todos/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_todo(todo_id: int, db: Session = Depends(get_db)) -> Response:
-    todo = db.get(Todo, todo_id)
+def delete_todo(
+    todo_id: int,
+    db: Session = Depends(get_db),
+    current_user: TokenUser = Depends(get_current_user),
+) -> Response:
+    todo = db.query(Todo).filter(Todo.id == todo_id, Todo.owner_id == current_user.id).one_or_none()
 
     if todo is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
