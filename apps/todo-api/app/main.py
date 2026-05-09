@@ -28,6 +28,11 @@ LOCAL_DEV_ORIGIN_REGEX = (
     r"172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|"
     r"192\.168\.\d{1,3}\.\d{1,3})(:\d+)?$"
 )
+ALLOWED_CORS_METHODS = ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]
+ALLOWED_CORS_HEADERS = ["Authorization", "Content-Type"]
+
+if APP_ENV == "production" and not os.getenv("CORS_ALLOW_ORIGINS"):
+    raise RuntimeError("CORS_ALLOW_ORIGINS must be set in production")
 
 
 def get_cors_origins() -> list[str]:
@@ -56,8 +61,8 @@ app.add_middleware(
     allow_origins=get_cors_origins(),
     allow_origin_regex=get_cors_origin_regex(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=ALLOWED_CORS_METHODS,
+    allow_headers=ALLOWED_CORS_HEADERS,
 )
 
 

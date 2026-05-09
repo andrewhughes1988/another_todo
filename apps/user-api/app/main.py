@@ -26,9 +26,14 @@ LOCAL_DEV_ORIGIN_REGEX = (
 )
 RATE_LIMIT_WINDOW_SECONDS = 60
 RATE_LIMIT_MAX_ATTEMPTS = 10
+ALLOWED_CORS_METHODS = ["GET", "POST", "OPTIONS"]
+ALLOWED_CORS_HEADERS = ["Authorization", "Content-Type", "X-Service-Token"]
 
 if APP_ENV == "production" and SERVICE_AUTH_TOKEN == DEFAULT_SERVICE_AUTH_TOKEN:
     raise RuntimeError("SERVICE_AUTH_TOKEN must be set to a production secret")
+
+if APP_ENV == "production" and not os.getenv("CORS_ALLOW_ORIGINS"):
+    raise RuntimeError("CORS_ALLOW_ORIGINS must be set in production")
 
 
 def get_cors_origins() -> list[str]:
@@ -67,8 +72,8 @@ app.add_middleware(
     allow_origins=get_cors_origins(),
     allow_origin_regex=get_cors_origin_regex(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=ALLOWED_CORS_METHODS,
+    allow_headers=ALLOWED_CORS_HEADERS,
 )
 
 
