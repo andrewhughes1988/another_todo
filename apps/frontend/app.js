@@ -5,10 +5,26 @@ const error = document.getElementById("todo-error");
 const count = document.getElementById("todo-count");
 const emptyState = document.getElementById("empty-state");
 const themeToggle = document.getElementById("theme-toggle");
+const authForm = document.getElementById("auth-form");
+const emailInput = document.getElementById("email-input");
+const passwordInput = document.getElementById("password-input");
+const authStatus = document.getElementById("auth-status");
+const authError = document.getElementById("auth-error");
+const loginButton = document.getElementById("login-button");
+const registerButton = document.getElementById("register-button");
+const logoutButton = document.getElementById("logout-button");
+const authModal = document.getElementById("auth-modal");
+const authModalTitle = document.getElementById("auth-modal-title");
+const authCloseButton = document.getElementById("auth-close-button");
+const authSubmitButton = document.getElementById("auth-submit-button");
 
+const API_CONFIG = window.APP_CONFIG || {};
+const TODO_API_URL = API_CONFIG.todoApiUrl || "http://localhost:4001";
+const USER_API_URL = API_CONFIG.userApiUrl || "http://localhost:4002";
 const MAX_TASK_LENGTH = 240;
 const HIDDEN_FORMATTING_CHARACTERS = /[\u0000-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g;
 const THEME_STORAGE_KEY = "todo-theme";
+const AUTH_STORAGE_KEY = "todo-auth";
 const ICONS = {
   moon: [
     ["path", { d: "M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" }]
@@ -37,6 +53,9 @@ const ICONS = {
   ]
 };
 
+let auth = getStoredAuth();
+let authMode = "login";
+
 function cleanTask(value) {
   return value
     .normalize("NFKC")
@@ -45,10 +64,15 @@ function cleanTask(value) {
     .trim();
 }
 
-// TODO: Reuse this validation when tasks are loaded from persistence.
-function setError(message) {
+function setTodoError(message) {
   error.textContent = message;
   input.setAttribute("aria-invalid", message ? "true" : "false");
+}
+
+function setAuthError(message) {
+  authError.textContent = message;
+  emailInput.setAttribute("aria-invalid", message ? "true" : "false");
+  passwordInput.setAttribute("aria-invalid", message ? "true" : "false");
 }
 
 function getSystemTheme() {
@@ -76,6 +100,29 @@ function safeSaveTheme(theme) {
   }
 }
 
+function getStoredAuth() {
+  try {
+    const stored = sessionStorage.getItem(AUTH_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function saveAuth(nextAuth) {
+  auth = nextAuth;
+
+  try {
+    if (nextAuth) {
+      sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextAuth));
+    } else {
+      sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    }
+  } catch (error) {
+    return;
+  }
+}
+
 function setTheme(theme) {
   const isDark = theme === "dark";
 
@@ -88,23 +135,63 @@ function setTheme(theme) {
   renderIcons();
 }
 
+function updateAuthState() {
+  const signedIn = Boolean(auth && auth.accessToken);
+
+  authStatus.textContent = signedIn ? auth.user.email : "Signed out";
+  logoutButton.hidden = !signedIn;
+  loginButton.hidden = signedIn;
+  registerButton.hidden = signedIn;
+  input.disabled = !signedIn;
+  form.querySelector("button").disabled = !signedIn;
+
+  if (!signedIn) {
+    list.replaceChildren();
+  }
+
+  updateListState();
+}
+
+function openAuthModal(mode) {
+  authMode = mode;
+  const isRegister = mode === "register";
+
+  authModalTitle.textContent = isRegister ? "Create account" : "Sign in";
+  authSubmitButton.textContent = isRegister ? "Register" : "Sign in";
+  emailInput.value = "";
+  passwordInput.value = "";
+  setAuthError("");
+  authModal.hidden = false;
+  emailInput.focus();
+}
+
+function closeAuthModal() {
+  authModal.hidden = true;
+  setAuthError("");
+}
+
 function updateListState() {
+  const signedIn = Boolean(auth && auth.accessToken);
   const openTasks = list.querySelectorAll("li:not(.is-complete)").length;
   const totalTasks = list.children.length;
 
   count.textContent = `${openTasks} ${openTasks === 1 ? "task" : "tasks"} open`;
-  emptyState.hidden = totalTasks > 0;
+  emptyState.hidden = signedIn && totalTasks > 0;
+  emptyState.textContent = signedIn ? "No tasks yet. Add one small thing to get moving." : "Sign in to view tasks.";
 }
 
 function createTaskItem(task) {
   const item = document.createElement("li");
+  item.dataset.todoId = task.id;
+  item.classList.toggle("is-complete", task.completed);
 
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
-  checkbox.setAttribute("aria-label", `Mark ${task} complete`);
+  checkbox.checked = task.completed;
+  checkbox.setAttribute("aria-label", `Mark ${task.title} complete`);
 
   const text = document.createElement("span");
-  text.textContent = task;
+  text.textContent = task.title;
 
   const removeButton = document.createElement("button");
   removeButton.type = "button";
@@ -113,21 +200,164 @@ function createTaskItem(task) {
     <i data-lucide="trash-2" aria-hidden="true"></i>
     <span class="sr-only">Remove</span>
   `;
-  removeButton.setAttribute("aria-label", `Remove ${task}`);
+  removeButton.setAttribute("aria-label", `Remove ${task.title}`);
   removeButton.title = "Remove task";
 
-  checkbox.addEventListener("change", function () {
-    item.classList.toggle("is-complete", checkbox.checked);
-    updateListState();
+  checkbox.addEventListener("change", async function () {
+    checkbox.disabled = true;
+
+    try {
+      const updated = await apiRequest(`${TODO_API_URL}/todos/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ completed: checkbox.checked })
+      });
+
+      item.classList.toggle("is-complete", updated.completed);
+      updateListState();
+    } catch (error) {
+      checkbox.checked = !checkbox.checked;
+      setTodoError(error.message);
+    } finally {
+      checkbox.disabled = false;
+    }
   });
 
-  removeButton.addEventListener("click", function () {
-    item.remove();
-    updateListState();
+  removeButton.addEventListener("click", async function () {
+    removeButton.disabled = true;
+
+    try {
+      await apiRequest(`${TODO_API_URL}/todos/${task.id}`, { method: "DELETE" });
+      item.remove();
+      updateListState();
+    } catch (error) {
+      removeButton.disabled = false;
+      setTodoError(error.message);
+    }
   });
 
   item.append(checkbox, text, removeButton);
   return item;
+}
+
+function renderTodos(todos) {
+  list.replaceChildren(...todos.map(createTaskItem));
+  updateListState();
+  renderIcons();
+}
+
+async function loadTodos() {
+  if (!auth || !auth.accessToken) {
+    updateAuthState();
+    return;
+  }
+
+  try {
+    const todos = await apiRequest(`${TODO_API_URL}/todos`);
+    renderTodos(todos);
+    setTodoError("");
+  } catch (error) {
+    setTodoError(error.message);
+  }
+}
+
+async function apiRequest(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+
+  if (options.body) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  if (auth && auth.accessToken) {
+    headers.set("Authorization", `Bearer ${auth.accessToken}`);
+  }
+
+  const response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401) {
+    saveAuth(null);
+    updateAuthState();
+    throw new Error("Session expired. Sign in again.");
+  }
+
+  if (!response.ok) {
+    throw new Error(await getApiError(response));
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  return response.json();
+}
+
+async function getApiError(response) {
+  try {
+    const payload = await response.json();
+
+    if (typeof payload.detail === "string") {
+      return payload.detail;
+    }
+  } catch (error) {
+    return "Request failed.";
+  }
+
+  return "Request failed.";
+}
+
+async function authenticate(mode) {
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
+
+  if (!email || !password) {
+    setAuthError("Email and password are required.");
+    return;
+  }
+
+  setAuthError("");
+
+  try {
+    const response = await fetch(`${USER_API_URL}/auth/${mode}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+
+    if (!response.ok) {
+      throw new Error(await getApiError(response));
+    }
+
+    const payload = await response.json();
+    saveAuth({
+      accessToken: payload.access_token,
+      user: payload.user
+    });
+    passwordInput.value = "";
+    closeAuthModal();
+    updateAuthState();
+    await loadTodos();
+  } catch (error) {
+    setAuthError(error.message);
+  }
+}
+
+async function logout() {
+  if (auth && auth.accessToken) {
+    try {
+      await fetch(`${USER_API_URL}/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${auth.accessToken}` }
+      });
+    } catch (error) {
+      // The local session can still be cleared if the network request fails.
+    }
+  }
+
+  saveAuth(null);
+  emailInput.value = "";
+  passwordInput.value = "";
+  setAuthError("");
+  setTodoError("");
+  updateAuthState();
 }
 
 function renderIcons() {
@@ -163,35 +393,92 @@ function renderIcons() {
   });
 }
 
-form.addEventListener("submit", function (event) {
+authForm.addEventListener("submit", function (event) {
+  event.preventDefault();
+  authenticate(authMode);
+});
+
+loginButton.addEventListener("click", function () {
+  openAuthModal("login");
+});
+
+registerButton.addEventListener("click", function () {
+  openAuthModal("register");
+});
+
+authCloseButton.addEventListener("click", function () {
+  closeAuthModal();
+});
+
+authModal.addEventListener("click", function (event) {
+  if (event.target === authModal) {
+    closeAuthModal();
+  }
+});
+
+document.addEventListener("keydown", function (event) {
+  if (event.key === "Escape" && !authModal.hidden) {
+    closeAuthModal();
+  }
+});
+
+logoutButton.addEventListener("click", function () {
+  logout();
+});
+
+form.addEventListener("submit", async function (event) {
   event.preventDefault();
 
   const task = cleanTask(input.value);
 
+  if (!auth || !auth.accessToken) {
+    setTodoError("Sign in before adding tasks.");
+    return;
+  }
+
   if (!task) {
-    setError("Enter a task before adding it.");
+    setTodoError("Enter a task before adding it.");
     input.focus();
     return;
   }
 
   if (task.length > MAX_TASK_LENGTH) {
-    setError(`Tasks must be ${MAX_TASK_LENGTH} characters or fewer.`);
+    setTodoError(`Tasks must be ${MAX_TASK_LENGTH} characters or fewer.`);
     input.focus();
     return;
   }
 
-  const item = createTaskItem(task);
+  try {
+    const created = await apiRequest(`${TODO_API_URL}/todos`, {
+      method: "POST",
+      body: JSON.stringify({ title: task })
+    });
 
-  list.appendChild(item);
-  input.value = "";
-  setError("");
-  updateListState();
-  renderIcons();
+    list.prepend(createTaskItem(created));
+    input.value = "";
+    setTodoError("");
+    updateListState();
+    renderIcons();
+  } catch (error) {
+    setTodoError(error.message);
+  }
 });
 
 input.addEventListener("input", function () {
   if (error.textContent) {
-    setError("");
+    setTodoError("");
+  }
+});
+
+emailInput.addEventListener("input", function () {
+  if (authError.textContent) {
+    setAuthError("");
+  }
+});
+
+passwordInput.addEventListener("input", function () {
+  if (authError.textContent) {
+    setAuthError("");
   }
 });
 
@@ -209,5 +496,6 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", fun
 });
 
 setTheme(getStoredTheme() || getSystemTheme());
-updateListState();
+updateAuthState();
+loadTodos();
 renderIcons();

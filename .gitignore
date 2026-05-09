@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .venv/
 .env
+*.db
 
 # Node
 node_modules/

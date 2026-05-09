@@ -67,6 +67,24 @@ body {
   gap: 16px;
 }
 
+.nav-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.auth-status {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .eyebrow {
   color: var(--accent);
   font-size: 0.78rem;
@@ -120,7 +138,9 @@ form {
   align-items: stretch;
 }
 
-#todo-input {
+#todo-input,
+#email-input,
+#password-input {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--line);
@@ -131,13 +151,17 @@ form {
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
-#todo-input:focus {
+#todo-input:focus,
+#email-input:focus,
+#password-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
   outline: none;
 }
 
-#todo-input[aria-invalid="true"] {
+#todo-input[aria-invalid="true"],
+#email-input[aria-invalid="true"],
+#password-input[aria-invalid="true"] {
   border-color: var(--danger);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 14%, transparent);
 }
@@ -189,6 +213,71 @@ button:hover {
 
 button:active {
   transform: translateY(1px);
+}
+
+.compact-button {
+  min-height: 36px;
+  padding: 0 14px;
+}
+
+.secondary-button {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+}
+
+.secondary-button:hover {
+  background: var(--task-bg);
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+
+.modal-backdrop {
+  align-items: center;
+  background: rgba(8, 11, 16, 0.62);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 20;
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.auth-modal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  max-width: 420px;
+  padding: 22px;
+  width: min(100%, 420px);
+}
+
+.modal-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.icon-button {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  height: 36px;
+  padding: 0;
+  width: 36px;
+}
+
+.icon-button:hover {
+  background: var(--task-bg);
 }
 
 .list-header {
@@ -280,6 +369,20 @@ li.is-complete span {
 
   form {
     flex-direction: column;
+  }
+
+  .header-top {
+    align-items: flex-start;
+    display: grid;
+  }
+
+  .nav-actions {
+    justify-content: flex-start;
+  }
+
+  .auth-status {
+    max-width: 100%;
+    width: 100%;
   }
 
   form button {

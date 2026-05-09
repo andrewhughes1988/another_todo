@@ -4,12 +4,16 @@ services:
       context: ./apps/frontend
     ports:
       - "5173:5173"
-    environment:
-      VITE_TODO_API_URL: http://localhost:4001
-      VITE_USER_API_URL: http://localhost:4002
     depends_on:
-      - todo-api
-      - user-api
+      todo-api:
+        condition: service_healthy
+      user-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5173/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   todo-api:
     build:
@@ -19,10 +23,18 @@ services:
     environment:
       PORT: 4001
       DATABASE_URL: postgres://todo:todo@postgres:5432/todo
-      REDIS_URL: redis://redis:6379
+      USER_API_URL: http://user-api:4002
+      SERVICE_AUTH_TOKEN: local-dev-service-token-32-bytes-minimum
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      user-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4001/health', timeout=2).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   user-api:
     build:
@@ -32,16 +44,18 @@ services:
     environment:
       PORT: 4002
       DATABASE_URL: postgres://todo:todo@postgres:5432/todo
+      SECRET_KEY: local-dev-secret-change-me-32-bytes-min
+      TOKEN_ISSUER: user-api
+      TOKEN_AUDIENCE: todo-api
+      SERVICE_AUTH_TOKEN: local-dev-service-token-32-bytes-minimum
     depends_on:
-      - postgres
-
-  notification-worker:
-    build:
-      context: ./apps/notification-worker
-    environment:
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4002/health', timeout=2).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres:
     image: postgres:16-alpine
@@ -53,12 +67,11 @@ services:
       POSTGRES_DB: todo
     volumes:
       - postgres-data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo -d todo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres-data:
-
