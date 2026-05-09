@@ -73,17 +73,22 @@ body {
 }
 
 .session-notice {
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--accent);
+  border: 1px solid var(--accent-dark);
   border-radius: 8px;
   box-shadow: var(--shadow);
-  color: var(--muted);
+  color: #ffffff;
   font-size: 0.9rem;
   font-weight: 700;
-  margin: 12px auto 0;
   padding: 10px 14px;
+  bottom: 18px;
+  left: 50%;
+  max-width: min(100% - 32px, 420px);
+  position: fixed;
   text-align: center;
-  width: min(100% - 32px, 720px);
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 30;
 }
 
 .session-notice[hidden] {

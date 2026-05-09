@@ -1,8 +1,7 @@
 import hmac
 import os
-from collections import defaultdict, deque
 from contextlib import asynccontextmanager
-from time import monotonic
+from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,9 +9,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .auth import create_access_token, get_token_identity, hash_password, verify_password
+from .auth import create_access_token, decode_access_token, get_token_identity, hash_password, verify_password
 from .database import Base, engine, get_db
-from .models import User
+from .models import RateLimitAttempt, RevokedToken, User
 from .schemas import AuthToken, TokenIntrospectionRequest, TokenIntrospectionResponse, UserLogin, UserRegister
 
 
@@ -27,9 +26,6 @@ LOCAL_DEV_ORIGIN_REGEX = (
 )
 RATE_LIMIT_WINDOW_SECONDS = 60
 RATE_LIMIT_MAX_ATTEMPTS = 10
-# TODO: Move rate-limit buckets and token revocation state to Redis before running multiple user-api replicas.
-rate_limit_attempts: dict[str, deque[float]] = defaultdict(deque)
-revoked_token_ids: set[str] = set()
 
 if APP_ENV == "production" and SERVICE_AUTH_TOKEN == DEFAULT_SERVICE_AUTH_TOKEN:
     raise RuntimeError("SERVICE_AUTH_TOKEN must be set to a production secret")
@@ -105,7 +101,7 @@ def health() -> dict[str, str]:
 
 @app.post("/auth/register", response_model=AuthToken, status_code=status.HTTP_201_CREATED)
 def register(request: Request, payload: UserRegister, db: Session = Depends(get_db)) -> AuthToken:
-    enforce_rate_limit(f"register:{request.client.host if request.client else 'unknown'}")
+    enforce_rate_limit(db, f"register:{request.client.host if request.client else 'unknown'}")
     user = User(email=payload.email, password_hash=hash_password(payload.password))
     db.add(user)
 
@@ -121,7 +117,7 @@ def register(request: Request, payload: UserRegister, db: Session = Depends(get_
 
 @app.post("/auth/login", response_model=AuthToken)
 def login(request: Request, payload: UserLogin, db: Session = Depends(get_db)) -> AuthToken:
-    enforce_rate_limit(f"login:{request.client.host if request.client else 'unknown'}:{payload.email}")
+    enforce_rate_limit(db, f"login:{request.client.host if request.client else 'unknown'}:{payload.email}")
     user = db.query(User).filter(User.email == payload.email).one_or_none()
 
     if user is None or not verify_password(payload.password, user.password_hash):
@@ -131,10 +127,18 @@ def login(request: Request, payload: UserLogin, db: Session = Depends(get_db)) -
 
 
 @app.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(authorization: str | None = Header(default=None)) -> Response:
+def logout(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> Response:
     token = get_bearer_token(authorization)
+    claims = decode_access_token(token)
     _, _, token_id = get_token_identity(token)
-    revoked_token_ids.add(token_id)
+    expires_at = datetime.fromtimestamp(int(claims["exp"]), tz=timezone.utc)
+
+    prune_expired_revoked_tokens(db)
+
+    if db.query(RevokedToken).filter(RevokedToken.token_id == token_id).one_or_none() is None:
+        db.add(RevokedToken(token_id=token_id, expires_at=expires_at))
+        db.commit()
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -149,7 +153,9 @@ def introspect(
 
     user_id, _, token_id = get_token_identity(payload.token)
 
-    if token_id in revoked_token_ids:
+    prune_expired_revoked_tokens(db)
+
+    if db.query(RevokedToken).filter(RevokedToken.token_id == token_id).one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     user = db.get(User, user_id)
@@ -159,17 +165,26 @@ def introspect(
     return TokenIntrospectionResponse(active=True, user=user)
 
 
-def enforce_rate_limit(key: str) -> None:
-    now = monotonic()
-    attempts = rate_limit_attempts[key]
+def enforce_rate_limit(db: Session, key: str) -> None:
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=RATE_LIMIT_WINDOW_SECONDS)
 
-    while attempts and now - attempts[0] > RATE_LIMIT_WINDOW_SECONDS:
-        attempts.popleft()
+    db.query(RateLimitAttempt).filter(RateLimitAttempt.created_at < cutoff).delete(synchronize_session=False)
+    attempt_count = db.query(RateLimitAttempt).filter(RateLimitAttempt.bucket_key == key).count()
 
-    if len(attempts) >= RATE_LIMIT_MAX_ATTEMPTS:
+    if attempt_count >= RATE_LIMIT_MAX_ATTEMPTS:
+        db.commit()
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many attempts")
 
-    attempts.append(now)
+    db.add(RateLimitAttempt(bucket_key=key, created_at=now))
+    db.commit()
+
+
+def prune_expired_revoked_tokens(db: Session) -> None:
+    db.query(RevokedToken).filter(RevokedToken.expires_at <= datetime.now(timezone.utc)).delete(
+        synchronize_session=False
+    )
+    db.commit()
 
 
 def get_bearer_token(authorization: str | None) -> str:

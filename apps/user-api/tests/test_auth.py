@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from contextlib import contextmanager
 import base64
 import json
 
@@ -9,7 +10,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
-from app.main import SERVICE_AUTH_TOKEN, app, rate_limit_attempts, revoked_token_ids
+from app.main import SERVICE_AUTH_TOKEN, app
+from app.models import RateLimitAttempt, RevokedToken
 
 
 @pytest.fixture()
@@ -35,8 +37,6 @@ def client() -> Generator[TestClient, None, None]:
         yield test_client
 
     app.dependency_overrides.clear()
-    rate_limit_attempts.clear()
-    revoked_token_ids.clear()
     Base.metadata.drop_all(bind=engine)
 
 
@@ -182,6 +182,25 @@ def test_logout_revokes_token(client: TestClient) -> None:
     assert introspect_response.status_code == 401
 
 
+def test_logout_revocation_is_stored_in_database(client: TestClient) -> None:
+    register_response = client.post(
+        "/auth/register",
+        json={"email": "ada@example.com", "password": "Password1"},
+    )
+    token = register_response.json()["access_token"]
+    _, payload_segment, _ = token.split(".")
+    payload = json.loads(base64url_decode(payload_segment))
+
+    response = client.post("/auth/logout", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 204
+
+    with open_test_db() as db:
+        revoked_token = db.query(RevokedToken).filter(RevokedToken.token_id == payload["jti"]).one_or_none()
+
+    assert revoked_token is not None
+
+
 def test_rejects_duplicate_registration(client: TestClient) -> None:
     client.post("/auth/register", json={"email": "ada@example.com", "password": "Password1"})
 
@@ -216,6 +235,17 @@ def test_rate_limits_login_attempts(client: TestClient) -> None:
     assert response.status_code == 429
 
 
+def test_rate_limit_attempts_are_stored_in_database(client: TestClient) -> None:
+    response = client.post("/auth/login", json={"email": "ada@example.com", "password": "WrongPassword1"})
+
+    assert response.status_code == 401
+
+    with open_test_db() as db:
+        attempt_count = db.query(RateLimitAttempt).count()
+
+    assert attempt_count == 1
+
+
 def test_rate_limits_registration_attempts(client: TestClient) -> None:
     for index in range(10):
         response = client.post(
@@ -242,3 +272,14 @@ def base64url_decode(value: str) -> bytes:
 
 def base64url_encode(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
+
+
+@contextmanager
+def open_test_db() -> Generator[Session, None, None]:
+    db_generator = app.dependency_overrides[get_db]()
+    db = next(db_generator)
+
+    try:
+        yield db
+    finally:
+        db_generator.close()
